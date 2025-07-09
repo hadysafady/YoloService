@@ -1,4 +1,4 @@
-import datetime
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from ultralytics import YOLO
@@ -7,6 +7,8 @@ import sqlite3
 import os
 import uuid
 import shutil
+from datetime import datetime, timedelta
+
 
 # Disable GPU usage
 import torch
@@ -111,6 +113,29 @@ def predict(file: UploadFile = File(...)):
         "detection_count": len(results[0].boxes),
         "labels": detected_labels
     }
+
+@app.get("/prediction/count")
+def prediction_count():
+    print(">>> DEBUG: prediction_count called <<<")
+    """
+    Returns the number of predictions made in the last 7 days.
+    """
+    one_week_ago = datetime.now() - timedelta(days=7)
+
+
+    conn = sqlite3.connect("predictions.db")
+    cursor = conn.cursor()
+
+
+    cursor.execute("""
+        SELECT COUNT(*) FROM prediction_sessions 
+        WHERE timestamp >= ?
+    """, (one_week_ago.isoformat(),))
+
+    count = cursor.fetchone()[0]
+    conn.close()
+
+    return  {"prediction_count": count}
 
 @app.get("/prediction/{uid}")
 def get_prediction_by_uid(uid: str):
@@ -219,27 +244,7 @@ def health():
     """
     return {"status": "ok"}
 
-@app.get("/prediction/count")
-def prediction_count():
-    """
-    Returns the number of predictions made in the last 7 days.
-    """
-    one_week_ago = datetime.now() - datetime.timedelta(days=7)
 
-
-    conn = sqlite3.connect("predictions.db")
-    cursor = conn.cursor()
-
-
-    cursor.execute("""
-        SELECT COUNT(*) FROM prediction_sessions 
-        WHERE timestamp >= ?
-    """, (one_week_ago.isoformat(),))
-
-    count = cursor.fetchone()[0]
-    conn.close()
-
-    return {"prediction_count": count}
 
 if __name__ == "__main__":
     import uvicorn
