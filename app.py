@@ -1,3 +1,4 @@
+import datetime
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from ultralytics import YOLO
@@ -217,6 +218,28 @@ def health():
     Health check endpoint
     """
     return {"status": "ok"}
+
+@app.get("/prediction/count")
+def prediction_count():
+    """
+    Returns the number of predictions made in the last 7 days.
+    """
+    one_week_ago = datetime.now() - datetime.timedelta(days=7)
+
+
+    conn = sqlite3.connect("predictions.db")
+    cursor = conn.cursor()
+
+
+    cursor.execute("""
+        SELECT COUNT(*) FROM prediction_sessions 
+        WHERE timestamp >= ?
+    """, (one_week_ago.isoformat(),))
+
+    count = cursor.fetchone()[0]
+    conn.close()
+
+    return {"prediction_count": count}
 
 if __name__ == "__main__":
     import uvicorn
