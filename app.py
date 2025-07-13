@@ -116,6 +116,17 @@ def predict(file: UploadFile = File(...)):
         "time_took": processing_time
     }
 
+@app.get("/predictions/count")
+def get_prediction_count():
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.execute("""
+            SELECT COUNT(*) FROM prediction_sessions
+            WHERE timestamp >= datetime('now', '-7 days')
+        """)
+        count = cursor.fetchone()[0]
+    return count
+
+
 @app.get("/prediction/{uid}")
 def get_prediction_by_uid(uid: str):
     """
