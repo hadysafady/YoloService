@@ -225,6 +225,36 @@ def get_image(type: str, filename: str):
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(path)
 
+@app.delete("/prediction/{uid}")
+def delete_prediction(uid: str):
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+
+        session = conn.execute(
+            "SELECT * FROM prediction_sessions WHERE uid = ?",
+            (uid,)
+        ).fetchone()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Prediction not found")
+
+        conn.execute(
+            "DELETE FROM detection_objects WHERE prediction_uid = ?",
+            (uid,)
+        )
+
+        conn.execute(
+            "DELETE FROM prediction_sessions WHERE uid = ?",
+            (uid,)
+        )
+
+    for file_path in [session["original_image"], session["predicted_image"]]:
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
+
+    return {"detail": f"Prediction {uid} deleted successfully"}
+
+
 @app.get("/prediction/{uid}/image")
 def get_prediction_image(uid: str, request: Request):
     """
