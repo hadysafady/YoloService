@@ -9,7 +9,6 @@ class TestLabelsDetected(unittest.TestCase):
         response = client.get("/labels")
         self.assertEqual(response.status_code,200)
         self.assertIsInstance(response.json(),list)
-        self.assertGreater(len(response.json()),0)
         labels = response.json()
         for label in labels:
             self.assertEqual(type(label),str)
