@@ -8,7 +8,6 @@ client = TestClient(app)
 
 class TestPredictionCount(unittest.TestCase):
     def setUp(self):
-        # הוסף prediction ידני ל-DB
         self.test_uid = "test-count-uid"
         with sqlite3.connect(DB_PATH) as conn:
             conn.execute("""
@@ -17,7 +16,6 @@ class TestPredictionCount(unittest.TestCase):
             """, (self.test_uid,))
 
     def tearDown(self):
-        # נקה אחרי הטסט כדי שלא יפריע לטסטים אחרים
         with sqlite3.connect(DB_PATH) as conn:
             conn.execute(
                 "DELETE FROM prediction_sessions WHERE uid = ?",
@@ -34,7 +32,7 @@ class TestPredictionCount(unittest.TestCase):
             rows = conn.execute(
                 "SELECT COUNT(*) as cnt FROM prediction_sessions WHERE timestamp >= datetime('now', '-7 days')"
             ).fetchone()
-            db_count = rows["cnt"]
+            db_count = rows[0]
 
         self.assertEqual(api_count, db_count)
 
