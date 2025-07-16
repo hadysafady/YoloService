@@ -20,8 +20,8 @@ class TestStatsEndpoint(unittest.TestCase):
         self.assertIsInstance(data["most_common_labels"], dict)
 
         self.assertGreaterEqual(data["total_predictions"], 0)
-        self.assertGreaterEqual(data["average_confidence_score"], 0.0)
-        self.assertLessEqual(data["average_confidence_score"], 1)
+        self.assertGreaterEqual(data["average_confidence_score"], 0.01)
+        self.assertLessEqual(data["average_confidence_score"], 1.0)
 
         labels = data["most_common_labels"]
         self.assertIsInstance(labels, dict)
