@@ -1,4 +1,5 @@
 import time
+from collections import Counter
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from ultralytics import YOLO
@@ -284,6 +285,39 @@ def health():
     Health check endpoint
     """
     return {"status": "ok"}
+
+@app.get("/stats")
+def get_overall_stats():
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor_cnt = conn.execute("""
+            SELECT COUNT(*) FROM prediction_sessions
+            WHERE timestamp >= datetime('now', '-7 days')
+        """)
+        total_predictions = cursor_cnt.fetchone()[0]
+
+        cursor_scores = conn.execute("""
+            SELECT do.score
+            FROM detection_objects do
+            JOIN prediction_sessions ps ON do.prediction_uid = ps.uid
+            WHERE ps.timestamp >= datetime('now', '-7 days')
+        """)
+        all_scores = [row[0] for row in cursor_scores]
+        avg_score = sum(all_scores) / len(all_scores) if all_scores else 0
+
+        cursor_labels = conn.execute("""
+            SELECT do.label
+            FROM detection_objects do
+            JOIN prediction_sessions ps ON do.prediction_uid = ps.uid
+            WHERE ps.timestamp >= datetime('now', '-7 days')
+        """)
+        all_labels = [row[0] for row in cursor_labels]
+        label_counts = Counter(all_labels)
+
+    return {
+        "total_predictions": total_predictions,
+        "average_confidence_score": avg_score,
+        "most_common_labels":dict(label_counts.most_common(3))
+    }
 
 if __name__ == "__main__":
     import uvicorn
