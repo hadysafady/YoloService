@@ -1,6 +1,6 @@
 import time
 from collections import Counter
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi import FastAPI, Security, UploadFile, File, HTTPException, Request ,Depends, status
 from fastapi.responses import FileResponse, Response
 from ultralytics import YOLO
 from PIL import Image
@@ -8,6 +8,7 @@ import sqlite3
 import os
 import uuid
 import shutil
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 # Disable GPU usage
 import torch
@@ -49,6 +50,19 @@ def init_db():
                 FOREIGN KEY (prediction_uid) REFERENCES prediction_sessions (uid)
             )
         """)
+
+        # Create users table
+        conn.execute(""" 
+            CREATE TABLE IF NOT EXISTS users (
+                username TEXT PRIMARY KEY,
+                password TEXT   
+            )
+        """)
+
+        # Adding username and password
+        conn.execute("""
+            INSERT or IGNORE INTO users (username,password) VALUES (?,?)
+            """, ('hadyy','safadyy'))
         
         # Create index for faster queries
         conn.execute("CREATE INDEX IF NOT EXISTS idx_prediction_uid ON detection_objects (prediction_uid)")
@@ -56,6 +70,26 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_score ON detection_objects (score)")
 
 init_db()
+
+security = HTTPBasic()
+
+def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.execute(
+            "SELECT password FROM users WHERE username = ?", 
+            (credentials.username,)
+        )
+        row = cursor.fetchone()
+    
+    if row is None or row[0] != credentials.password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    
+    return credentials.username
+
 
 def save_prediction_session(uid, original_image, predicted_image):
     """
@@ -77,8 +111,25 @@ def save_detection_object(prediction_uid, label, score, box):
             VALUES (?, ?, ?, ?)
         """, (prediction_uid, label, score, str(box)))
 
+optional_security = HTTPBasic(auto_error=False)
 @app.post("/predict")
-def predict(file: UploadFile = File(...)):
+def predict(file: UploadFile = File(...),credentials: HTTPBasicCredentials = Security(optional_security)):
+    username = None
+    if credentials:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.execute(
+                "SELECT password FROM users WHERE username = ?", 
+                (credentials.username,)
+            )
+            row = cursor.fetchone()
+        if row and row[0] == credentials.password:
+            username = credentials.username
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unauthorized",
+                headers={"WWW-Authenticate": "Basic"},)
+
     """
     Predict objects in an image
     """
@@ -118,7 +169,7 @@ def predict(file: UploadFile = File(...)):
     }
 
 @app.get("/predictions/count")
-def get_prediction_count():
+def get_prediction_count(username: str = Depends(authenticate)):
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.execute("""
             SELECT COUNT(*) FROM prediction_sessions
@@ -129,7 +180,7 @@ def get_prediction_count():
 
 
 @app.get("/prediction/{uid}")
-def get_prediction_by_uid(uid: str):
+def get_prediction_by_uid(uid: str, username: str = Depends(authenticate)):
     """
     Get prediction session by uid with all detected objects
     """
@@ -161,7 +212,7 @@ def get_prediction_by_uid(uid: str):
             ]
         }
 @app.get("/labels")
-def get_labels_last_week():
+def get_labels_last_week(username: str = Depends(authenticate)):
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.execute("""
             SELECT DISTINCT do.label
@@ -177,7 +228,7 @@ labels = [
    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
 ]
 @app.get("/predictions/label/{label}")
-def get_predictions_by_label(label: str):
+def get_predictions_by_label(label: str, username: str = Depends(authenticate)):
     """
     Get prediction sessions containing objects with specified label
     """
@@ -196,7 +247,7 @@ def get_predictions_by_label(label: str):
         return [{"uid": row["uid"], "timestamp": row["timestamp"]} for row in rows]
 
 @app.get("/predictions/score/{min_score}")
-def get_predictions_by_score(min_score: float):
+def get_predictions_by_score(min_score: float, username: str = Depends(authenticate)):
     """
     Get prediction sessions containing objects with score >= min_score
     """
@@ -215,7 +266,7 @@ def get_predictions_by_score(min_score: float):
         return [{"uid": row["uid"], "timestamp": row["timestamp"]} for row in rows]
 
 @app.get("/image/{type}/{filename}")
-def get_image(type: str, filename: str):
+def get_image(type: str, filename: str, username: str = Depends(authenticate)):
     """
     Get image by type and filename
     """
@@ -227,7 +278,7 @@ def get_image(type: str, filename: str):
     return FileResponse(path)
 
 @app.delete("/prediction/{uid}")
-def delete_prediction(uid: str):
+def delete_prediction(uid: str, username: str = Depends(authenticate)):
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
 
@@ -257,7 +308,7 @@ def delete_prediction(uid: str):
 
 
 @app.get("/prediction/{uid}/image")
-def get_prediction_image(uid: str, request: Request):
+def get_prediction_image(uid: str, request: Request, username: str = Depends(authenticate)):
     """
     Get prediction image by uid
     """
@@ -285,9 +336,9 @@ def health():
     Health check endpoint
     """
     return {"status": "ok"}
-
+ 
 @app.get("/stats")
-def get_overall_stats():
+def get_overall_stats(username: str = Depends(authenticate)):
     with sqlite3.connect(DB_PATH) as conn:
         cursor_cnt = conn.execute("""
             SELECT COUNT(*) FROM prediction_sessions
