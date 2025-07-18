@@ -1,3 +1,4 @@
+import base64
 import unittest
 import sqlite3
 import os
@@ -5,6 +6,9 @@ from fastapi.testclient import TestClient
 from app import app, DB_PATH
 
 client = TestClient(app)
+def get_basic_auth_header(username, password):
+    token = base64.b64encode(f"{username}:{password}".encode()).decode()
+    return {"Authorization": f"Basic {token}"}
 
 class TestPredictionCount(unittest.TestCase):
     def setUp(self):
@@ -23,7 +27,8 @@ class TestPredictionCount(unittest.TestCase):
             )
 
     def test_prediction_count_endpoint(self):
-        response = client.get("/predictions/count")
+        headers = get_basic_auth_header("hadyy" , "safadyy")
+        response = client.get("/predictions/count",headers=headers)
         self.assertEqual(response.status_code, 200)
         api_count = response.json()
         self.assertIsInstance(api_count, int)

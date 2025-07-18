@@ -1,12 +1,18 @@
+import base64
 import unittest
 from fastapi.testclient import TestClient
 from app import app
 
 client = TestClient(app)
 
+def get_basic_auth_header(username, password):
+    token = base64.b64encode(f"{username}:{password}".encode()).decode()
+    return {"Authorization": f"Basic {token}"}
+
 class TestStatsEndpoint(unittest.TestCase):
     def test_stats_endpoint(self):
-        response = client.get("/stats")
+        headers = get_basic_auth_header("hadyy" , "safadyy")
+        response = client.get("/stats",headers=headers)
         self.assertEqual(response.status_code, 200)
         
         data = response.json()
