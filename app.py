@@ -336,7 +336,7 @@ def health():
     Health check endpoint
     """
     return {"status": "ok"}
-
+ 
 @app.get("/stats")
 def get_overall_stats(username: str = Depends(authenticate)):
     with sqlite3.connect(DB_PATH) as conn:
