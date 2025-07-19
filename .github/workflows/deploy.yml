@@ -1,7 +1,5 @@
 name: Deploy Service
 
-name: Deploy Service
-
 on:
   push:
     branches:
