@@ -25,5 +25,11 @@ jobs:
           
           # YOUR CODE HERE ... 
           #  - get the updated code version from github
+          git fetch origin
+          git reset --hard origin/main
           #  - install venv and dependencies if needed
+          [ -d .venv ] || python3 -m venv .venv
+
+          .venv/bin/pip install -r requirements.txt
           #  - set up the Linux service
+          
