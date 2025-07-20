@@ -27,3 +27,7 @@ class TestDeletePrediction(unittest.TestCase):
 
         get_response = client.get(f"/prediction/{prediction_uid}",headers=headers)
         self.assertEqual(get_response.status_code, 404 or 401)
+
+        wrong_uid = client.delete("/prediction/wrong-uid-123",headers=headers)
+        self.assertEqual(wrong_uid.status_code,404)
+
